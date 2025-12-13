@@ -1,3 +1,9 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/ATemova/crypto-simulator/3b71cc20169a9b4a278d8eed86ef7e622f53f8ba/crypto-simulator.png" 
+       alt="Crypto Simulator Logo" 
+       width="150">
+</p>
+
 # 🚀 Crypto Simulator
 
 A lightweight **Python blockchain simulator** featuring:
@@ -85,3 +91,4 @@ Planned improvements:
 - Transaction mempool validation  
 - Networking with peer discovery  
 - Persistent DB storage
+
