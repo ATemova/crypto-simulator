@@ -2,11 +2,10 @@ import hashlib
 import json
 from ecdsa import SigningKey, VerifyingKey, SECP256k1
 
-
 class Transaction:
     def __init__(self, sender, recipient, amount, signature=None):
-        self.sender = sender
-        self.recipient = recipient
+        self.sender = sender        # public key hex OR "MINING_REWARD"
+        self.recipient = recipient  # public key hex
         self.amount = amount
         self.signature = signature
 
@@ -19,15 +18,20 @@ class Transaction:
         }
 
     def calculate_hash(self):
-        tx_string = json.dumps(self.to_dict(), sort_keys=True).encode()
-        return hashlib.sha256(tx_string).hexdigest()
+        tx_str = json.dumps({
+            "sender": self.sender,
+            "recipient": self.recipient,
+            "amount": self.amount
+        }, sort_keys=True).encode()
 
-    def sign(self, private_key):
+        return hashlib.sha256(tx_str).hexdigest()
+
+    def sign(self, private_key_hex):
         if self.sender == "MINING_REWARD":
-            return
-
+            return  # no signature needed
+        
+        sk = SigningKey.from_string(bytes.fromhex(private_key_hex), curve=SECP256k1)
         message = self.calculate_hash().encode()
-        sk = SigningKey.from_string(bytes.fromhex(private_key), curve=SECP256k1)
         self.signature = sk.sign(message).hex()
 
     def is_valid(self):
@@ -39,8 +43,7 @@ class Transaction:
 
         try:
             vk = VerifyingKey.from_string(bytes.fromhex(self.sender), curve=SECP256k1)
-            message = self.calculate_hash().encode()
-            vk.verify(bytes.fromhex(self.signature), message)
+            vk.verify(bytes.fromhex(self.signature), self.calculate_hash().encode())
             return True
         except:
             return False

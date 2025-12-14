@@ -4,85 +4,50 @@ from blockchain.transaction import Transaction
 from blockchain.wallet import Wallet
 from network.p2p import P2PNetwork
 
-
 class Node:
     def __init__(self, port):
         self.port = port
-        self.blockchain = Blockchain()
         self.wallet = Wallet()
+        self.blockchain = Blockchain()
         self.p2p = P2PNetwork(self)
 
         print(f"🟢 Node started on port {port}")
         print(f"🔑 Public Key: {self.wallet.get_public_key_hex()[:20]}...")
 
-    # start node
     async def start(self):
         asyncio.create_task(self.p2p.start_server(port=self.port))
-        await asyncio.sleep(0.2)  # allow server to bind
+        await asyncio.sleep(0.3)
 
-    async def connect_to_peer(self, peer_port):
-        url = f"tcp://127.0.0.1:{peer_port}"
-        print(f"🔌 Connecting to peer {url} ...")
+    async def connect_to_peer(self, url):
         await self.p2p.connect_to_peer(url)
 
-    # broadcasting
-    async def broadcast_transaction(self, tx: Transaction):
-        await self.p2p.broadcast({
-            "type": "transaction",
-            "data": tx.to_dict()
-        })
-
-    async def broadcast_block(self, block):
-        await self.p2p.broadcast({
-            "type": "new_block",
-            "data": {
-                "index": block.index,
-                "hash": block.hash,
-                "nonce": block.nonce,
-                "previous_hash": block.previous_hash,
-                "transactions": [tx.to_dict() for tx in block.transactions]
-            }
-        })
-
-    # incoming network messages
+    # network callbacks
     async def handle_network_message(self, msg):
-        msg_type = msg.get("type")
-
-        if msg_type == "transaction":
+        if msg["type"] == "transaction":
             await self.handle_incoming_transaction(msg["data"])
-        elif msg_type == "new_block":
+
+        elif msg["type"] == "new_block":
             await self.handle_incoming_block(msg["data"])
 
-    async def handle_incoming_transaction(self, tx_data):
-        """Receive and add a transaction from a peer."""
+    async def handle_incoming_transaction(self, data):
         tx = Transaction(
-            sender=tx_data["sender"],
-            recipient=tx_data["recipient"],
-            amount=tx_data["amount"],
-            signature=tx_data.get("signature")
+            sender=data["sender"],
+            recipient=data["recipient"],
+            amount=data["amount"],
+            signature=data["signature"]
         )
 
         try:
             self.blockchain.add_transaction(tx)
-            print("💬 Transaction added to pending pool.")
+            print("💬 Received transaction added to pool.")
         except Exception as e:
-            print("❌ Invalid incoming transaction:", e)
+            print("❌ Invalid transaction:", e)
 
     async def handle_incoming_block(self, block_data):
-        """Receive a mined block from a peer."""
-        print(f"📦 Received block #{block_data['index']} from peer.")
-
-        incoming_index = block_data["index"]
-        local_index = len(self.blockchain.chain) - 1
-
-        if incoming_index > local_index:
-            print("🔄 Peer has a longer chain. Sync not implemented yet.")
-        else:
-            print("ℹ Ignoring block (local chain already up-to-date).")
+        print(f"📦 Received block #{block_data['index']} (sync not implemented).")
 
     # local operations
     def create_transaction(self, recipient, amount):
-        """Create + sign + locally add a new transaction."""
         tx = Transaction(
             sender=self.wallet.get_public_key_hex(),
             recipient=recipient,
@@ -94,18 +59,71 @@ class Node:
 
     async def send_transaction(self, recipient, amount):
         tx = self.create_transaction(recipient, amount)
-        await self.broadcast_transaction(tx)
+        await self.p2p.broadcast({"type": "transaction", "data": tx.to_dict()})
         print("📤 Transaction broadcasted.")
 
     async def mine(self):
-        """Mine pending transactions."""
-        miner_address = self.wallet.get_public_key_hex()
+        miner_addr = self.wallet.get_public_key_hex()
+        self.blockchain.mine_pending_transactions(miner_addr)
 
-        print("⛏ Mining started...")
+        block = self.blockchain.get_last_block()
+        await self.p2p.broadcast({
+            "type": "new_block",
+            "data": {
+                "index": block.index,
+                "hash": block.hash,
+                "transactions": [t.to_dict() for t in block.transactions]
+            }
+        })
 
-        self.blockchain.mine_pending_transactions(miner_address)
+        print(f"⛏ Mining complete. Block #{block.index}")
 
-        new_block = self.blockchain.get_last_block()
-        print(f"🏆 Mined block #{new_block.index} → {new_block.hash[:16]}...")
+    # utility commands for CLI
+    def get_balance(self):
+        pk = self.wallet.get_public_key_hex()
+        balance = 0
 
-        await self.broadcast_block(new_block)
+        for block in self.blockchain.chain:
+            for tx in block.transactions:
+                if tx.recipient == pk:
+                    balance += tx.amount
+                if tx.sender == pk:
+                    balance -= tx.amount
+        return balance
+
+    def print_blocks(self):
+        for block in self.blockchain.chain:
+            print(f"\nBlock #{block.index}")
+            print("Hash:", block.hash[:20], "...")
+            print("Prev:", block.previous_hash[:20], "...")
+            print("Tx count:", len(block.transactions))
+
+            for tx in block.transactions:
+                print(" -", tx.to_dict())
+
+    def print_txpool(self):
+        pool = self.blockchain.pending_transactions
+        if not pool:
+            print("🕳 Pending transaction pool empty.")
+            return
+
+        print(f"🧾 {len(pool)} pending transactions:")
+        for tx in pool:
+            print(" -", tx.to_dict())
+
+    def print_peers(self):
+        if not self.p2p.peers:
+            print("🌐 No connected peers.")
+            return
+
+        print("🌐 Connected peers:")
+        for _, writer in self.p2p.peers:
+            addr = writer.get_extra_info("peername")
+            print(" -", addr)
+
+    def print_state(self):
+        print("\nNode State")
+        print("Balance:", self.get_balance())
+        print("Blockchain height:", len(self.blockchain.chain))
+        print("Pending transactions:", len(self.blockchain.pending_transactions))
+        print("Peers:", len(self.p2p.peers))

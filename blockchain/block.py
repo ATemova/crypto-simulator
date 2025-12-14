@@ -2,7 +2,6 @@ import time
 import hashlib
 import json
 
-
 class Block:
     def __init__(self, index, transactions, previous_hash, nonce=0):
         self.index = index

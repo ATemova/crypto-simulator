@@ -1,91 +1,104 @@
 import asyncio
 from network.node import Node
 
-
 async def main():
-    print("\n=== Crypto Simulator ===\n")
+    print("\nCrypto Simulator\n")
 
-    # ask user for node port
+    # Ask for port
     while True:
         try:
-            port = int(input("Enter port for this node (e.g., 8000): "))
+            port = int(input("Enter port for this node: "))
             break
         except ValueError:
-            print("❌ Please enter a valid number.")
+            print("❌ Invalid port.")
 
     node = Node(port)
     await node.start()
 
+    # COMMAND LIST
     print("\nCommands:")
     print(" connect <port>              - connect to peer node")
     print(" send <recipient> <amount>   - send coins")
+    print(" sendraw <recipient> <amount>- create tx without broadcast")
     print(" mine                        - mine pending transactions")
     print(" balance                     - show your balance")
-    print(" chain                       - show blockchain length")
+    print(" chain                       - show blockchain length + validity")
+    print(" blocks                      - list all blocks")
+    print(" txpool                      - show pending transactions")
+    print(" peers                       - show connected peers")
+    print(" address                     - show your public key")
+    print(" state                       - show node state summary")
+    print(" validate                    - full chain validation")
     print(" exit                        - quit\n")
 
-    # main command loop
+    # MAIN LOOP
     while True:
-        cmd = input("> ").strip().split()
+        cmd = input("> ").split()
 
         if not cmd:
             continue
 
-        # connect to peer
+        # CONNECT
         if cmd[0] == "connect" and len(cmd) == 2:
-            try:
-                peer_port = int(cmd[1])
-                print(f"🔌 Connecting to peer {peer_port} ...")
-                asyncio.create_task(node.connect_to_peer(peer_port))
+            peer_port = cmd[1]
+            await node.connect_to_peer(f"tcp://127.0.0.1:{peer_port}")
 
-            except ValueError:
-                print("❌ Invalid port number.")
-
-        # send transaction
+        # SEND TRANSACTION
         elif cmd[0] == "send" and len(cmd) == 3:
-            recipient = cmd[1]
-            try:
-                amount = float(cmd[2])
-                asyncio.create_task(node.send_transaction(recipient, amount))
-            except ValueError:
-                print("❌ Amount must be numeric.")
+            await node.send_transaction(cmd[1], float(cmd[2]))
 
-        # mine block
+        # SEND RAW (no broadcast)
+        elif cmd[0] == "sendraw" and len(cmd) == 3:
+            tx = node.create_transaction(cmd[1], float(cmd[2]))
+            print("📦 Raw transaction created:")
+            print(tx.to_dict())
+
+        # MINING
         elif cmd[0] == "mine":
-            print("⛏️ Mining started...")
-            asyncio.create_task(node.mine())
+            await node.mine()
 
-        # balance
+        # BALANCE
         elif cmd[0] == "balance":
-            balance = 0
-            pk = node.wallet.get_public_key_hex()
+            print("💰 Balance:", node.get_balance())
 
-            for block in node.blockchain.chain:
-                for tx in block.transactions:
-                    if tx.recipient == pk:
-                        balance += tx.amount
-                    if tx.sender == pk:
-                        balance -= tx.amount
-
-            print(f"💰 Balance: {balance}")
-
-        # show chain infro
+        # CHAIN STATS
         elif cmd[0] == "chain":
-            print(f"⛓ Chain length: {len(node.blockchain.chain)}")
-            print(f"✔ Valid: {node.blockchain.is_chain_valid()}")
+            print(f"⛓ Length: {len(node.blockchain.chain)}")
+            print("✔ Valid:", node.blockchain.is_chain_valid())
 
-        # exit
+        # LIST BLOCKS
+        elif cmd[0] == "blocks":
+            node.print_blocks()
+
+        # TX POOL
+        elif cmd[0] == "txpool":
+            node.print_txpool()
+
+        # PEERS
+        elif cmd[0] == "peers":
+            node.print_peers()
+
+        # ADDRESS
+        elif cmd[0] == "address":
+            print("🔑 Your address:")
+            print(node.wallet.get_public_key_hex())
+
+        # NODE STATE
+        elif cmd[0] == "state":
+            node.print_state()
+
+        # VALIDATE
+        elif cmd[0] == "validate":
+            print("✔ Chain valid:", node.blockchain.is_chain_valid())
+
+        # EXIT
         elif cmd[0] == "exit":
-            print("👋 Exiting node...")
+            print("👋 Exiting...")
             break
 
         else:
             print("❌ Unknown command.")
 
 
-# Entry Point
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\n👋 Program terminated.")
+    asyncio.run(main())
