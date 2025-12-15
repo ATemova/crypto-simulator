@@ -1,42 +1,38 @@
 <p align="center">
   <img src="https://raw.githubusercontent.com/ATemova/crypto-simulator/3b71cc20169a9b4a278d8eed86ef7e622f53f8ba/crypto-simulator.png" 
        alt="Crypto Simulator Logo" 
-       width="150">
+       width="120">
 </p>
 
-# 🚀 Crypto Simulator
+<h1 align="center">🚀 Crypto Simulator</h1>
 
-A lightweight **Python blockchain simulator** featuring:
-- A custom blockchain  
-- Transaction signing (ECDSA)  
-- Proof-of-Work mining  
-- Wallet key pairs  
-- Peer-to-peer TCP communication  
-- Multiple interactive CLI nodes  
+<p align="center">
+A lightweight <b>Python blockchain simulator</b> for learning and experimentation.
+</p>
 
-This project is for **learning & experimentation**, not production use.
+---
 
 ## ⭐ Features
 
 ### Blockchain
-- Genesis block creation
-- Transactions with digital signatures
-- Proof-of-Work mining algorithm
-- Mining rewards
-- Adjustable difficulty
-- Full blockchain validation
+- Genesis block creation  
+- Signed transactions (ECDSA)  
+- Proof-of-Work mining  
+- Mining rewards  
+- Adjustable difficulty  
+- Full chain validation  
 
 ### Wallets
-- Each node generates its own ECDSA key pair
-- Supports signing + verifying transactions
+- Auto-generated ECDSA key pair  
+- Digital signature support  
 
 ### Peer-to-Peer Network
-- Fully asynchronous TCP networking
-- Nodes can connect to each other manually
-- Broadcasting:
-  - New transactions
-  - Newly mined blocks
-- Incoming & outgoing connections handled simultaneously
+- Asynchronous TCP communication  
+- Manual peer connections  
+- Broadcasts transactions + blocks  
+- Handles multiple peers at once  
+
+---
 
 ## ▶ How to Run
 
@@ -54,9 +50,9 @@ Enter: 8000
 python app.py
 Enter: 8001
 ```
-### Connect nodes
+### Connect Node #2 → Node #1
 ```bash
-In Node #2: connect 8000
+connect 8000
 ```
 ### Send a transaction
 ```bash
@@ -66,13 +62,12 @@ send <recipient_public_key> 5
 ## ⚠️ Known Limitations (To Be Improved)
 These will be added in future updates:
 
-- No full blockchain synchronization yet  
-- Blocks from peers not merged into local chain  
-- No UTXO model or balances verification  
-- No persistent storage  
-- Mining rewards simplified  
-- No automatic peer discovery  
-
+- No blockchain synchronization
+- Blocks from peers not merged
+- No UTXO/accounting model
+- No persistent storage
+- Mining reward simplified
+- No automatic peer discovery
 
 ## 🛠 Technologies Used
 - Python 3  
@@ -81,14 +76,12 @@ These will be added in future updates:
 - SHA-256 hashing  
 - Proof-of-Work  
 
-
 ## 📌 Future Development
 Planned improvements:
 
-- Full chain download + sync between nodes  
-- Web interface for monitoring the chain  
-- UTXO or account-based balance tracking  
-- Transaction mempool validation  
-- Networking with peer discovery  
-- Persistent DB storage
-
+- Full node synchronization
+- Web dashboard interface
+- UTXO or account-based balances
+- Mempool validation
+- Peer discovery
+- Database storage
