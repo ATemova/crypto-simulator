@@ -4,6 +4,12 @@
        width="120">
 </p>
 
+<p align="center">
+  <img alt="Python" src="https://img.shields.io/badge/Python-3.10+-blue?style=for-the-badge">
+  <img alt="Status" src="https://img.shields.io/badge/Status-Active-brightgreen?style=for-the-badge">
+  <img alt="License" src="https://img.shields.io/badge/License-MIT-orange?style=for-the-badge">
+</p>
+
 <h1 align="center">🚀 Crypto Simulator</h1>
 
 <p align="center">
@@ -83,3 +89,4 @@ Planned improvements:
 - Peer discovery
 
 - Database storage
+
