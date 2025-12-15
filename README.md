@@ -10,8 +10,6 @@
 A lightweight <b>Python blockchain simulator</b> for learning and experimentation.
 </p>
 
----
-
 ## ⭐ Features
 
 ### Blockchain
@@ -32,7 +30,6 @@ A lightweight <b>Python blockchain simulator</b> for learning and experimentatio
 - Broadcasts transactions + blocks  
 - Handles multiple peers at once  
 
----
 
 ## ▶ How to Run
 
@@ -84,4 +81,5 @@ Planned improvements:
 - UTXO or account-based balances
 - Mempool validation
 - Peer discovery
+
 - Database storage
