@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Crypto Simulator Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="container">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <h2>⚡ Node Controls</h2>
+        <button onclick="mineBlock()" class="btn primary">⛏ Mine Block</button>
+        <button onclick="refreshChain()" class="btn secondary">🔄 Refresh</button>
+
+        <h3>📊 Live Stats</h3>
+        <ul class="stats">
+            <li>Blockchain Height: <span id="height">—</span></li>
+            <li>Balance: <span id="balance">—</span></li>
+            <li>Pending TX: <span id="pending">—</span></li>
+            <li>Peers: <span id="peers">—</span></li>
+        </ul>
+    </aside>
+
+    <!-- Main Section -->
+    <main class="main">
+        <h1>🚀 Crypto Simulator Explorer</h1>
+        <div id="blocks" class="block-list"></div>
+    </main>
+
+</div>
+
+<!-- Transaction / Block Modal -->
+<div id="modal" class="modal hidden">
+    <div class="modal-content">
+        <span class="close" onclick="closeModal()">✖</span>
+        <pre id="modal-text"></pre>
+    </div>
+</div>
+
+<script src="modal.js"></script>
+<script src="dashboard.js"></script>
+</body>
+</html>
