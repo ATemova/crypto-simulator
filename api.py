@@ -1,124 +1,193 @@
-import os
+import argparse
 import asyncio
-from fastapi import FastAPI, WebSocket
-from fastapi.middleware.cors import CORSMiddleware
+import os
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from blockchain.blockchain import DEFAULT_DIFFICULTY, ValidationError
 from network.node import Node
 
-# ---------------------------------------------------
-# FASTAPI APP
-# ---------------------------------------------------
-app = FastAPI(title="Crypto Simulator API")
-
-# Enable dashboard access from browser
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# ---------------------------------------------------
-# SERVE DASHBOARD STATIC FILES
-# ---------------------------------------------------
-dashboard_path = os.path.join(os.getcwd(), "dashboard")
-app.mount("/dashboard", StaticFiles(directory=dashboard_path), name="dashboard")
-
-@app.get("/")
-def root():
-    """Opens the dashboard automatically."""
-    return FileResponse("dashboard/index.html")
-
-@app.get("/dashboard")
-def dashboard_home():
-    return FileResponse("dashboard/index.html")
+DASHBOARD_DIR = Path(__file__).resolve().parent / "dashboard"
+EXPLORER_BLOCKS = 100
 
 
-# ---------------------------------------------------
-# CREATE NODE (running internally on port 8000)
-# ---------------------------------------------------
-node = Node(8000)
-
-@app.on_event("startup")
-async def start_node():
-    """Start blockchain node when API boots"""
-    await node.start()
-
-
-# ---------------------------------------------------
-# MODELS
-# ---------------------------------------------------
 class TxRequest(BaseModel):
-    recipient: str
-    amount: float
+    recipient: str = Field(min_length=128, max_length=128)
+    amount: float = Field(gt=0)
 
 
-# ---------------------------------------------------
-# REST API ENDPOINTS
-# ---------------------------------------------------
-
-@app.get("/chain")
-def get_chain():
-    return {
-        "length": len(node.blockchain.chain),
-        "valid": node.blockchain.is_chain_valid(),
-        "chain": [b.to_dict() for b in node.blockchain.chain]
-    }
+class PeerRequest(BaseModel):
+    host: str = "127.0.0.1"
+    port: int = Field(gt=0, lt=65536)
 
 
-@app.get("/balance")
-def get_balance():
-    pk = node.wallet.get_public_key_hex()
-
-    balance = 0
-    for block in node.blockchain.chain:
-        for tx in block.transactions:
-            if tx.recipient == pk:
-                balance += tx.amount
-            if tx.sender == pk:
-                balance -= tx.amount
-
-    return {"balance": balance}
+def parse_peer(value: str, default_host: str):
+    if ":" in value:
+        host, port = value.replace("tcp://", "").rsplit(":", 1)
+        return host, int(port)
+    return default_host, int(value)
 
 
-@app.get("/pending")
-def get_pending():
-    return {
-        "pending": [tx.to_dict() for tx in node.blockchain.pending_transactions]
-    }
+def create_app(p2p_port=None, p2p_host=None, peers=None, difficulty=None) -> FastAPI:
+    p2p_port = p2p_port if p2p_port is not None else int(os.getenv("P2P_PORT", "6000"))
+    p2p_host = p2p_host or os.getenv("P2P_HOST", "127.0.0.1")
+    difficulty = difficulty if difficulty is not None else int(os.getenv("DIFFICULTY", str(DEFAULT_DIFFICULTY)))
+    if peers is None:
+        peers = [p for p in os.getenv("PEERS", "").split(",") if p.strip()]
 
+    node = Node(p2p_port, host=p2p_host, difficulty=difficulty)
 
-@app.get("/peers")
-def get_peers():
-    return {"peers": node.p2p.peers}
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        await node.start()
+        for peer in peers:
+            try:
+                await node.connect_to_peer(*parse_peer(peer.strip(), p2p_host))
+            except (OSError, ValueError) as exc:
+                node.log(f"❌ Could not connect to {peer}: {exc}")
+        yield
+        await node.stop()
 
+    app = FastAPI(title="Crypto Simulator API", lifespan=lifespan)
+    app.state.node = node
+    app.mount("/dashboard", StaticFiles(directory=DASHBOARD_DIR, html=True), name="dashboard")
 
-@app.post("/mine")
-async def mine_block():
-    """Trigger mining and return newly mined block."""
-    await node.mine()
-    block = node.blockchain.get_last_block()
-    return {"status": "success", "block": block.to_dict()}
+    @app.get("/", include_in_schema=False)
+    async def root():
+        return RedirectResponse("/dashboard/")
 
+    @app.get("/favicon.ico", include_in_schema=False)
+    async def favicon():
+        return FileResponse(Path(__file__).resolve().parent / "crypto-simulator.png")
 
-# ---------------------------------------------------
-# WEBSOCKET FEED FOR LIVE DASHBOARD UPDATES
-# ---------------------------------------------------
-@app.websocket("/ws")
-async def dashboard_feed(ws: WebSocket):
-    await ws.accept()
+    # ---------------------------------------------------
+    # READ ENDPOINTS
+    # ---------------------------------------------------
+    @app.get("/state")
+    async def get_state():
+        return node.state()
 
-    while True:
-        data = {
-            "chain_length": len(node.blockchain.chain),
-            "balance": get_balance()["balance"],
-            "pending": len(node.blockchain.pending_transactions),
-            "peers": node.p2p.peers,
-            "chain": [b.to_dict() for b in node.blockchain.chain]
+    @app.get("/chain")
+    async def get_chain():
+        return {
+            "length": node.blockchain.height,
+            "valid": node.blockchain.is_chain_valid(),
+            "chain": node.blockchain.to_list(),
         }
 
-        await ws.send_json(data)
-        await asyncio.sleep(1)  # update every second
+    @app.get("/blocks/{index}")
+    async def get_block(index: int):
+        if not 0 <= index < node.blockchain.height:
+            raise HTTPException(404, "Block not found")
+        return node.blockchain.chain[index].to_dict()
+
+    @app.get("/transactions/{tx_id}")
+    async def get_transaction(tx_id: str):
+        found = node.blockchain.find_transaction(tx_id)
+        if found is not None:
+            index, tx = found
+            return {"status": "confirmed", "block": index, "transaction": tx.to_dict()}
+        for tx in node.blockchain.pending_transactions:
+            if tx.tx_id == tx_id:
+                return {"status": "pending", "block": None, "transaction": tx.to_dict()}
+        raise HTTPException(404, "Transaction not found")
+
+    @app.get("/address")
+    async def get_address():
+        return {"address": node.address}
+
+    @app.get("/balance")
+    async def get_balance(address: str = None):
+        return node.get_balance(address)
+
+    @app.get("/pending")
+    async def get_pending():
+        return {"pending": [tx.to_dict() for tx in node.blockchain.pending_transactions]}
+
+    @app.get("/peers")
+    async def get_peers():
+        return {"peers": node.p2p.peer_list()}
+
+    @app.get("/events")
+    async def get_events():
+        return {"events": node.events[-50:]}
+
+    # ---------------------------------------------------
+    # WRITE ENDPOINTS
+    # ---------------------------------------------------
+    @app.post("/mine")
+    async def mine_block():
+        if node.mining:
+            raise HTTPException(409, "Already mining")
+        block = await node.mine()
+        if block is None:
+            raise HTTPException(409, "Mining was aborted because a competing block arrived")
+        return {"status": "success", "block": block.to_dict()}
+
+    @app.post("/transactions", status_code=201)
+    async def create_transaction(req: TxRequest):
+        try:
+            tx = await node.send_transaction(req.recipient, req.amount)
+        except ValidationError as exc:
+            raise HTTPException(400, str(exc))
+        return {"status": "pending", "transaction": tx.to_dict()}
+
+    @app.post("/peers", status_code=201)
+    async def add_peer(req: PeerRequest):
+        try:
+            await node.connect_to_peer(req.host, req.port)
+        except (OSError, ValueError) as exc:
+            raise HTTPException(400, f"Could not connect: {exc}")
+        return {"peers": node.p2p.peer_list()}
+
+    # ---------------------------------------------------
+    # WEBSOCKET FEED FOR LIVE DASHBOARD UPDATES
+    # ---------------------------------------------------
+    @app.websocket("/ws")
+    async def dashboard_feed(ws: WebSocket):
+        await ws.accept()
+        last_tip = None
+        try:
+            while True:
+                state = node.state()
+                payload = {
+                    "state": state,
+                    "peers": node.p2p.peer_list(),
+                    "pending": [tx.to_dict() for tx in node.blockchain.pending_transactions],
+                    "events": node.events[-30:],
+                }
+                if state["tip_hash"] != last_tip:
+                    last_tip = state["tip_hash"]
+                    payload["blocks"] = [b.to_dict() for b in node.blockchain.chain[-EXPLORER_BLOCKS:]]
+                await ws.send_json(payload)
+                await asyncio.sleep(1)
+        except (WebSocketDisconnect, RuntimeError):
+            pass
+
+    return app
+
+
+app = create_app()
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    parser = argparse.ArgumentParser(description="Crypto Simulator node with web dashboard")
+    parser.add_argument("--api-port", type=int, default=5000, help="HTTP port for API and dashboard")
+    parser.add_argument("--p2p-port", type=int, default=6000, help="TCP port for peer-to-peer traffic")
+    parser.add_argument("--host", default="127.0.0.1", help="interface to bind")
+    parser.add_argument("--peer", action="append", default=[], help="peer to connect to (port or host:port)")
+    parser.add_argument("--difficulty", type=int, default=DEFAULT_DIFFICULTY, help="PoW difficulty")
+    options = parser.parse_args()
+
+    uvicorn.run(
+        create_app(options.p2p_port, options.host, options.peer, options.difficulty),
+        host=options.host,
+        port=options.api_port,
+    )

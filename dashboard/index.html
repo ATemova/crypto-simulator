@@ -2,45 +2,87 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Crypto Simulator Dashboard</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" href="/favicon.ico">
+    <link rel="stylesheet" href="/dashboard/styles.css">
 </head>
 <body>
 
 <div id="container">
 
-    <!-- Sidebar -->
     <aside class="sidebar">
-        <h2>⚡ Node Controls</h2>
-        <button onclick="mineBlock()" class="btn primary">⛏ Mine Block</button>
-        <button onclick="refreshChain()" class="btn secondary">🔄 Refresh</button>
+        <h2>⚡ Node</h2>
+        <div class="status">
+            <span id="conn-dot" class="dot offline"></span>
+            <span id="conn-text">Connecting…</span>
+        </div>
+
+        <label class="label">Your address</label>
+        <div class="address-row">
+            <code id="address" class="address">—</code>
+            <button id="copy-address" class="btn small secondary" type="button">Copy</button>
+        </div>
+
+        <button id="mine-btn" class="btn primary" type="button">⛏ Mine Block</button>
 
         <h3>📊 Live Stats</h3>
         <ul class="stats">
-            <li>Blockchain Height: <span id="height">—</span></li>
-            <li>Balance: <span id="balance">—</span></li>
-            <li>Pending TX: <span id="pending">—</span></li>
-            <li>Peers: <span id="peers">—</span></li>
+            <li>Height <span id="height">—</span></li>
+            <li>Balance <span id="balance">—</span></li>
+            <li>Available <span id="available">—</span></li>
+            <li>Pending TX <span id="pending">—</span></li>
+            <li>Peers <span id="peers">—</span></li>
+            <li>Difficulty <span id="difficulty">—</span></li>
+            <li>Chain valid <span id="valid">—</span></li>
         </ul>
+
+        <h3>📤 Send</h3>
+        <form id="send-form" class="form">
+            <input id="recipient" placeholder="Recipient address (128 hex chars)" required minlength="128" maxlength="128">
+            <input id="amount" type="number" step="any" min="0" placeholder="Amount" required>
+            <button class="btn secondary" type="submit">Send</button>
+        </form>
+
+        <h3>🔗 Connect peer</h3>
+        <form id="peer-form" class="form">
+            <input id="peer-addr" placeholder="6001 or host:6001" required>
+            <button class="btn secondary" type="submit">Connect</button>
+        </form>
+        <ul id="peer-list" class="list"></ul>
+
+        <div id="toast" class="toast hidden"></div>
     </aside>
 
-    <!-- Main Section -->
     <main class="main">
         <h1>🚀 Crypto Simulator Explorer</h1>
-        <div id="blocks" class="block-list"></div>
+
+        <section>
+            <h2>📥 Mempool</h2>
+            <div id="mempool" class="list muted">Empty</div>
+        </section>
+
+        <section>
+            <h2>⛓ Blocks <small class="muted">(newest first)</small></h2>
+            <div id="blocks" class="block-list"></div>
+        </section>
+
+        <section>
+            <h2>📝 Node log</h2>
+            <div id="events" class="log"></div>
+        </section>
     </main>
 
 </div>
 
-<!-- Transaction / Block Modal -->
 <div id="modal" class="modal hidden">
     <div class="modal-content">
-        <span class="close" onclick="closeModal()">✖</span>
+        <button class="close" id="modal-close" type="button" aria-label="Close">✖</button>
         <pre id="modal-text"></pre>
     </div>
 </div>
 
-<script src="modal.js"></script>
-<script src="dashboard.js"></script>
+<script src="/dashboard/modal.js"></script>
+<script src="/dashboard/dashboard.js"></script>
 </body>
 </html>
